@@ -606,11 +606,6 @@
                 border-bottom: 1px solid var(--gas-border);
                 border-radius: 0; /* Reset border radius for stacked panels */
             }
-            .chat-panel, .preview-panel {
-                min-width: unset;
-                max-width: unset;
-                flex-grow: 1; /* Allow them to grow equally */
-            }
             .chat-panel {
                 height: 45vh; /* Give chat some fixed height when stacked */
                 border-top-left-radius: 8px; /* Apply to top panel */
@@ -944,7 +939,11 @@ RULES:
             }
 
             chatMessages.appendChild(messageBubble);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // Scroll to the bottom of the chat after the message is rendered
+            // Use requestAnimationFrame to ensure the DOM has updated before scrolling
+            requestAnimationFrame(() => {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
         }
 
         // Function to send message to the AI model
