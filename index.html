@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct AI Chat & Code Maker</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter for a clean look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Prism.js CSS for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <style>
+        /* Visual Studio Dark Theme Colors */
+        :root {
+            --vs-bg-primary: #1e1e1e; /* Main background */
+            --vs-bg-secondary: #252526; /* Panel backgrounds */
+            --vs-bg-tertiary: #333333; /* Header/Tab bar backgrounds */
+            --vs-border: #3c3c3c; /* Panel borders */
+            --vs-text-light: #cccccc; /* Light text */
+            --vs-text-dark: #808080; /* Darker text/placeholders */
+            --vs-accent-blue: #007acc; /* Primary accent blue */
+            --vs-accent-blue-hover: #005f99; /* Darker blue on hover */
+            --vs-tab-active-bg: #007acc; /* Active tab background */
+            --vs-tab-active-text: #ffffff; /* Active tab text */
+            --vs-tab-inactive-text: #cccccc; /* Inactive tab text */
+            --vs-shadow: rgba(0, 0, 0, 0.3); /* Subtle shadow */
+            --vs-code-bg: #1a1a1a; /* Code block background */
+            --vs-code-text: #d4d4d4; /* Code text */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--vs-bg-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            color: var(--vs-text-light);
+        }
+
+        /* Overall IDE container */
+        .ide-container {
+            display: flex;
+            flex-direction: column; /* Stack main content and bottom panel */
+            width: 100%;
+            height: 90vh; /* Overall IDE height */
+            max-width: 1200px; /* Max width for the entire IDE */
+            background-color: var(--vs-bg-primary);
+            border-radius: 0.25rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            overflow: hidden; /* Hide overflow from resizing */
+        }
+
+        .main-content-area {
+            display: flex; /* Chat, Preview side-by-side */
+            flex-grow: 1; /* Takes remaining height */
+            position: relative; /* For resizers */
+        }
+
+        .panel-container {
+            background-color: var(--vs-bg-secondary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-right: 1px solid var(--vs-border); /* Separator for panels */
+            border-bottom: 1px solid var(--vs-border); /* For bottom resizer */
+            position: relative; /* For resizers */
+        }
+
+        /* Specific panel widths/flex-basis */
+        .chat-panel {
+            flex-basis: 50%; /* Chat takes half width */
+            min-width: 300px;
+            border-top-left-radius: 0.25rem; /* Apply to chat panel */
+            border-bottom-left-radius: 0.25rem; /* Apply to chat panel */
+        }
+        .preview-panel {
+            flex-basis: 50%; /* Preview takes half width */
+            min-width: 300px;
+            border-right: none; /* No right border on the last panel */
+            border-top-right-radius: 0.25rem;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .panel-header {
+            background-color: var(--vs-bg-tertiary);
+            color: var(--vs-text-light);
+            padding: 0.75rem 1.5rem;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-bottom: 1px solid var(--vs-border);
+        }
+
+        /* Content areas within panels */
+        .panel-content {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            background-color: var(--vs-bg-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        /* Resizer styles */
+        .resizer {
+            position: absolute;
+            background-color: transparent;
+            z-index: 100;
+        }
+        .resizer.horizontal {
+            width: 10px;
+            top: 0;
+            bottom: 0;
+            cursor: ew-resize;
+        }
+        .resizer.vertical {
+            height: 10px;
+            left: 0;
+            right: 0;
+            cursor: ns-resize;
+        }
+        .resizer:hover {
+            background-color: rgba(0, 122, 204, 0.3); /* Accent blue on hover */
+        }
+
+        /* Chat Specific */
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            scroll-behavior: smooth;
+        }
+        .message-bubble {
+            max-width: 95%;
+            padding: 0.6rem 0.9rem;
+            border-radius: 0.25rem;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #3f3f46;
+            color: var(--vs-text-light);
+            align-self: flex-end;
+        }
+        .ai-message {
+            background-color: #2d2d30;
+            color: var(--vs-text-light);
+            align-self: flex-start;
+        }
+        .chat-input-area {
+            display: flex;
+            padding: 1rem;
+            border-top: 1px solid var(--vs-border);
+            background-color: var(--vs-bg-tertiary);
+            border-bottom-left-radius: 0.25rem;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .chat-input {
+            flex-grow: 1;
+            padding: 0.6rem 0.9rem;
+            border: 1px solid var(--vs-border);
+            border-radius: 0.25rem;
+            outline: none;
+            font-size: 0.9rem;
+            background-color: #3e3e42;
+            color: var(--vs-text-light);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .chat-input:focus {
+            border-color: var(--vs-accent-blue);
+            box-shadow: 0 0 0 1px var(--vs-accent-blue);
+        }
+        .chat-input::placeholder {
+            color: var(--vs-text-dark);
+        }
+        .send-button {
+            background-color: var(--vs-accent-blue);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 0.25rem;
+            margin-left: 0.75rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .send-button:hover {
+            background-color: var(--vs-accent-blue-hover);
+            transform: translateY(-1px);
+        }
+        .send-button:active {
+            transform: translateY(0);
+        }
+        .loading-indicator {
+            text-align: center;
+            padding: 0.75rem;
+            color: var(--vs-text-dark);
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+        /* Code blocks in chat messages - basic styling */
+        .code-block {
+            background-color: var(--vs-code-bg);
+            color: var(--vs-code-text);
+            padding: 0.8rem;
+            border-radius: 0.25rem;
+            font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            border: 1px solid var(--vs-border);
+        }
+        .code-block code {
+            display: block;
+        }
+        .language-label {
+            font-size: 0.7rem;
+            color: var(--vs-text-dark);
+            text-align: right;
+            margin-bottom: 0.4rem;
+            display: block;
+        }
+
+        /* Preview Panel Specific Styles */
+        .preview-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--vs-bg-secondary);
+        }
+        .preview-tabs {
+            display: flex;
+            justify-content: flex-start;
+            background-color: var(--vs-bg-tertiary);
+            border-bottom: 1px solid var(--vs-border);
+            padding: 0;
+        }
+        .preview-tab-button {
+            padding: 0.6rem 1rem;
+            border: none;
+            background-color: transparent;
+            color: var(--vs-tab-inactive-text);
+            font-weight: 400;
+            cursor: pointer;
+            transition: color 0.2s, background-color 0.2s;
+            border-radius: 0;
+            border-right: 1px solid var(--vs-border);
+            position: relative;
+        }
+        .preview-tab-button:last-child {
+            border-right: none;
+        }
+        .preview-tab-button.active {
+            color: var(--vs-tab-active-text);
+            background-color: var(--vs-accent-blue);
+        }
+        .preview-tab-button:hover:not(.active) {
+            color: var(--vs-text-light);
+            background-color: #3e3e42;
+        }
+
+        .tab-view {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            overflow: auto;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .tab-view.active {
+            display: block;
+        }
+
+        /* Code View specific styles */
+        .code-view-container {
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        /* Prism.js line numbers */
+        .code-view-content.line-numbers {
+            padding-left: 3.8em; /* Space for line numbers */
+            position: relative;
+        }
+        .code-view-content.line-numbers .line-numbers-rows {
+            left: 0;
+            top: 0;
+            width: 3em; /* Width of the line number column */
+        }
+        .code-view-content {
+            flex-grow: 1;
+            background-color: var(--vs-code-bg);
+            color: var(--vs-code-text);
+            padding: 1rem;
+            border-radius: 0.25rem;
+            font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            overflow: auto;
+            border: 1px solid var(--vs-border);
+        }
+        .copy-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #555555;
+            color: white;
+            padding: 0.4rem 0.7rem;
+            border: none;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            z-index: 10;
+        }
+        .copy-button:hover {
+            background-color: #666666;
+        }
+        .copy-button:active {
+            transform: translateY(1px);
+        }
+        .copy-feedback {
+            position: absolute;
+            top: 10px;
+            right: 90px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 0.4rem 0.7rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            z-index: 10;
+        }
+        .copy-feedback.show {
+            opacity: 1;
+        }
+
+        /* Webpage Preview specific styles */
+        .webpage-preview-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #ffffff;
+            border-radius: 0.25rem;
+            border: 1px solid var(--vs-border);
+        }
+        .run-code-button {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: var(--vs-accent-blue);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background-color 0.2s, transform 0.1s;
+            z-index: 10;
+        }
+        .run-code-button:hover {
+            background-color: var(--vs-accent-blue-hover);
+            transform: translateY(-1px);
+        }
+        .run-code-button:active {
+            transform: translateY(0);
+        }
+
+
+        /* Bottom Console/Output Panel */
+        .bottom-panel {
+            height: 20%; /* Initial height for console */
+            min-height: 50px;
+            max-height: 400px;
+            background-color: var(--vs-bg-secondary);
+            border-top: 1px solid var(--vs-border);
+            border-bottom-left-radius: 0.25rem;
+            border-bottom-right-radius: 0.25rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        .console-header {
+            background-color: var(--vs-bg-tertiary);
+            color: var(--vs-text-light);
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-bottom: 1px solid var(--vs-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .clear-console-button {
+            background-color: #555555;
+            color: white;
+            padding: 0.3rem 0.6rem;
+            border: none;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: background-color 0.2s;
+        }
+        .clear-console-button:hover {
+            background-color: #666666;
+        }
+        .console-content {
+            flex-grow: 1;
+            padding: 0.8rem;
+            font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.85rem;
+            color: #b3b3b3;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .console-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .console-content::-webkit-scrollbar-track {
+            background: var(--vs-bg-secondary);
+            border-radius: 10px;
+        }
+        .console-content::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 10px;
+        }
+        .console-content::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+        .console-content p.info { color: #b3b3b3; }
+        .console-content p.success { color: #98c379; }
+        .console-content p.error { color: #e06c75; }
+
+
+        /* Responsive adjustments */
+        @media (max-width: 1024px) {
+            .ide-container {
+                flex-direction: column;
+                height: 98vh; /* Use more height on smaller screens */
+                max-width: none;
+            }
+            .main-content-area {
+                flex-direction: column; /* Stack chat and preview vertically */
+                flex-grow: 1;
+            }
+            .panel-container {
+                width: 100%;
+                height: auto; /* Allow height to be determined by content or flex-grow */
+                flex-basis: auto !important; /* Override fixed flex-basis for stacking */
+                border-right: none;
+                border-bottom: 1px solid var(--vs-border);
+                border-radius: 0.25rem; /* Reset border radius for stacked panels */
+            }
+            .chat-panel, .preview-panel {
+                min-width: unset;
+                max-width: unset;
+                flex-grow: 1; /* Allow them to grow equally */
+            }
+            .chat-panel {
+                height: 45vh; /* Give chat some fixed height when stacked */
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+            }
+            .preview-panel {
+                height: 45vh; /* Give preview some fixed height when stacked */
+                border-radius: 0;
+                border-bottom: none; /* Last panel in stack */
+            }
+            .bottom-panel {
+                height: 20vh; /* Adjust console height */
+                border-radius: 0 0 0.25rem 0.25rem;
+            }
+            .resizer.horizontal {
+                display: none; /* Hide horizontal resizers when stacked */
+            }
+            .resizer.vertical {
+                display: none; /* Hide vertical resizers when stacked */
+            }
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            .ide-container {
+                height: 98vh;
+            }
+            .chat-panel {
+                height: 40vh;
+            }
+            .preview-panel {
+                height: 40vh;
+            }
+            .bottom-panel {
+                height: 18vh;
+            }
+            .panel-header {
+                font-size: 1rem;
+                padding: 0.5rem 1rem;
+            }
+            .chat-input-area {
+                padding: 0.8rem;
+            }
+            .chat-input {
+                padding: 0.5rem 0.7rem;
+                font-size: 0.85rem;
+            }
+            .send-button {
+                padding: 0.5rem 1rem;
+                font-size: 0.85rem;
+                margin-left: 0.6rem;
+            }
+            .message-bubble {
+                padding: 0.5rem 0.8rem;
+            }
+            .code-block {
+                padding: 0.6rem;
+                font-size: 0.8rem;
+            }
+            .language-label {
+                font-size: 0.65rem;
+            }
+            .copy-button, .copy-feedback {
+                padding: 0.3rem 0.6rem;
+                font-size: 0.7rem;
+            }
+            .copy-feedback {
+                right: 80px;
+            }
+            .preview-tab-button {
+                padding: 0.5rem 0.8rem;
+                font-size: 0.8rem;
+            }
+            .console-header {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.8rem;
+            }
+            .console-content {
+                padding: 0.6rem;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ide-container">
+        <div class="main-content-area" id="mainContentArea">
+            <!-- Chat Panel -->
+            <div class="panel-container chat-panel" id="chatPanel">
+                <div class="panel-header">
+                    Direct AI Chat
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <!-- Messages will be appended here -->
+                    <div class="message-bubble ai-message">
+                        Hello! I am a direct and unfiltered AI, designed to follow your instructions precisely. Ask me to "make code" or "make a webpage" and describe what you need.
+                    </div>
+                </div>
+                <div class="loading-indicator hidden" id="loadingIndicator">
+                    AI is thinking...
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" class="chat-input" placeholder="Type your message...">
+                    <button id="sendButton" class="send-button">Send</button>
+                </div>
+                <div class="resizer horizontal" id="chatResizer"></div>
+            </div>
+
+            <!-- Preview Panel -->
+            <div class="panel-container preview-panel" id="previewPanel">
+                <div class="panel-header">
+                    Code & Webpage Preview
+                </div>
+                <div class="preview-tabs">
+                    <button id="codeTabButton" class="preview-tab-button active">Code View</button>
+                    <button id="webpageTabButton" class="preview-tab-button">Webpage Preview</button>
+                </div>
+                <div class="preview-content">
+                    <div id="codeViewTab" class="tab-view active">
+                        <div class="code-view-container">
+                            <button class="copy-button" id="copyCodeButton">Copy Code</button>
+                            <span class="copy-feedback" id="copyFeedback">Copied!</span>
+                            <pre class="code-view-content language-html line-numbers" id="codePreviewContent"><code class="language-html">
+                                &lt;p style='font-family: sans-serif; color: #888; text-align: center; margin-top: 50px;'&gt;Generated code will appear here.&lt;/p&gt;
+                            </code></pre>
+                        </div>
+                    </div>
+                    <div id="webpagePreviewTab" class="tab-view">
+                        <iframe class="webpage-preview-iframe" id="previewIframe" srcdoc="<p style='font-family: sans-serif; color: #555; text-align: center; margin-top: 50px;'>Generated webpage will appear here.</p>"></iframe>
+                        <button class="run-code-button hidden" id="runCodeButton">Run Code</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Console/Output Panel -->
+        <div class="bottom-panel" id="bottomPanel">
+            <div class="console-header">
+                Output / Console
+                <button class="clear-console-button" id="clearConsoleButton">Clear</button>
+            </div>
+            <div class="console-content" id="consoleContent">
+                <p class="info">Welcome to the integrated console. AI messages and system outputs will appear here.</p>
+            </div>
+            <div class="resizer vertical" id="bottomResizer"></div>
+        </div>
+    </div>
+
+    <!-- Prism.js for syntax highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+    <script>
+        // Get references to DOM elements
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const chatMessages = document.getElementById('chatMessages');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const codeTabButton = document.getElementById('codeTabButton');
+        const webpageTabButton = document.getElementById('webpageTabButton');
+        const codeViewTab = document.getElementById('codeViewTab');
+        const webpagePreviewTab = document.getElementById('webpagePreviewTab');
+        const codePreviewContent = document.getElementById('codePreviewContent');
+        const previewIframe = document.getElementById('previewIframe');
+        const copyCodeButton = document.getElementById('copyCodeButton');
+        const copyFeedback = document.getElementById('copyFeedback');
+        const consoleContent = document.getElementById('consoleContent');
+        const runCodeButton = document.getElementById('runCodeButton');
+        const clearConsoleButton = document.getElementById('clearConsoleButton');
+
+        // Panel elements for resizing
+        const chatPanel = document.getElementById('chatPanel');
+        const previewPanel = document.getElementById('previewPanel');
+        const bottomPanel = document.getElementById('bottomPanel');
+        const chatResizer = document.getElementById('chatResizer'); // Resizer between chat and preview
+        const bottomResizer = document.getElementById('bottomResizer');
+        const mainContentArea = document.getElementById('mainContentArea'); // The container for the top two panels
+
+        // Initialize chat history for the AI model
+        let chatHistory = [{ role: "model", parts: [{ text: "Hello! I am a direct and unfiltered AI, designed to follow your instructions precisely. Ask me to \"make code\" or \"make a webpage\" and describe what you need." }] }];
+        let lastGeneratedHtml = ''; // Store the last generated HTML for preview
+        let lastGeneratedCode = ''; // Store the last generated code for code view
+
+        // Function to log messages to the console panel
+        function logToConsole(message, type = 'info') {
+            const p = document.createElement('p');
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            p.classList.add(type); // Add class for styling
+            consoleContent.appendChild(p);
+            consoleContent.scrollTop = consoleContent.scrollHeight; // Scroll to bottom
+        }
+
+        // Function to clear the console
+        function clearConsole() {
+            consoleContent.innerHTML = '<p class="info">Console cleared.</p>';
+        }
+
+        // Function to display a message in the chat interface
+        function displayMessage(message, sender, isCode = false, language = '') {
+            const messageBubble = document.createElement('div');
+            messageBubble.classList.add('message-bubble');
+
+            if (sender === 'user') {
+                messageBubble.classList.add('user-message');
+                chatHistory.push({ role: "user", parts: [{ text: message }] }); // Add user message to history
+                logToConsole(`User: ${message.substring(0, Math.min(message.length, 50))}...`, 'info');
+            } else {
+                messageBubble.classList.add('ai-message');
+                chatHistory.push({ role: "model", parts: [{ text: message }] }); // Add AI message to history
+                logToConsole(`AI: ${message.substring(0, Math.min(message.length, 50))}...`, 'info');
+            }
+
+            if (isCode) {
+                const codeContainer = document.createElement('div');
+                codeContainer.classList.add('code-block');
+                if (language) {
+                    const langLabel = document.createElement('span');
+                    langLabel.classList.add('language-label');
+                    langLabel.textContent = `Language: ${language}`;
+                    codeContainer.appendChild(langLabel);
+                }
+                const codeElement = document.createElement('code');
+                codeElement.textContent = message;
+                codeContainer.appendChild(codeElement);
+                messageBubble.appendChild(codeContainer);
+
+                // Update the code preview panel
+                lastGeneratedCode = message;
+                // Determine the correct language for Prism.js
+                let prismLanguage = language.toLowerCase();
+                if (prismLanguage === 'html_css_js') {
+                    prismLanguage = 'html'; // Treat as HTML for highlighting
+                } else if (!Prism.languages[prismLanguage]) {
+                    prismLanguage = 'plaintext'; // Fallback if language not supported
+                }
+
+                codePreviewContent.innerHTML = `<code class="language-${prismLanguage}">${Prism.highlight(message, Prism.languages[prismLanguage], prismLanguage)}</code>`;
+                codePreviewContent.className = `code-view-content language-${prismLanguage} line-numbers`; // Apply classes for Prism and line numbers
+                Prism.highlightElement(codePreviewContent.querySelector('code')); // Re-highlight
+                logToConsole(`Generated ${language} code.`, 'success');
+
+                // If it's HTML code, also update the webpage preview iframe and show run button
+                if (language.toLowerCase().includes('html')) { // Check for 'html' or 'html_css_js'
+                    lastGeneratedHtml = message;
+                    previewIframe.srcdoc = lastGeneratedHtml; // Load the HTML into the iframe
+                    runCodeButton.classList.remove('hidden'); // Show run button
+                    switchToPreviewTab('webpage'); // Automatically switch to webpage preview
+                    logToConsole("Webpage preview updated. Click 'Run Code' to refresh.", 'success');
+                } else {
+                    lastGeneratedHtml = ''; // Clear HTML if non-web code
+                    previewIframe.srcdoc = "<p style='font-family: sans-serif; color: #555; text-align: center; margin-top: 50px;'>Generated webpage will appear here.</p>";
+                    runCodeButton.classList.add('hidden'); // Hide run button
+                    switchToPreviewTab('code'); // Automatically switch to code view for other code
+                }
+
+            } else {
+                messageBubble.textContent = message;
+            }
+
+            chatMessages.appendChild(messageBubble);
+
+            // Scroll to the bottom of the chat
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Function to send message to the AI model
+        async function sendMessageToAI() {
+            const userMessage = chatInput.value.trim();
+            if (userMessage === '') return; // Don't send empty messages
+
+            displayMessage(userMessage, 'user'); // Display user's message
+            chatInput.value = ''; // Clear input field
+
+            loadingIndicator.classList.remove('hidden'); // Show loading indicator
+            logToConsole("Sending message to AI...", 'info');
+
+            try {
+                // API key will be provided by the Canvas environment at runtime
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                let promptForAI = userMessage;
+                let isCodeRequest = false;
+                let requestedLanguage = '';
+
+                // Check for code generation commands
+                if (userMessage.toLowerCase().includes("make code") || userMessage.toLowerCase().includes("generate code")) {
+                    isCodeRequest = true;
+                    promptForAI = `Generate code based on the following description: "${userMessage}". Provide the code in a single block, clearly indicating the language.`;
+                    if (userMessage.toLowerCase().includes("html")) requestedLanguage = 'html';
+                    else if (userMessage.toLowerCase().includes("css")) requestedLanguage = 'css';
+                    else if (userMessage.toLowerCase().includes("javascript")) requestedLanguage = 'javascript';
+                    else if (userMessage.toLowerCase().includes("python")) requestedLanguage = 'python';
+                    else requestedLanguage = 'auto'; // Let AI decide if not specified
+                } else if (userMessage.toLowerCase().includes("make a webpage") || userMessage.toLowerCase().includes("create a webpage")) {
+                    isCodeRequest = true;
+                    promptForAI = `Generate a complete HTML webpage including basic CSS and JavaScript based on the following description: "${userMessage}". Provide the HTML, CSS, and JS in separate code blocks, clearly indicating each language.`;
+                    requestedLanguage = 'html_css_js';
+                }
+
+                const payload = {
+                    contents: chatHistory, // Send the entire chat history for context
+                    generationConfig: {
+                        // Configure the model to be more direct and less conversational
+                        temperature: 0.7, // A bit of creativity
+                        topK: 40,
+                        topP: 0.95,
+                        maxOutputTokens: 2000, // Increased for potentially longer code outputs
+                        stopSequences: [],
+                    }
+                };
+
+                // If it's a code request, modify the last user message in chatHistory for the AI's context
+                // This ensures the AI gets the specific code generation instruction
+                if (isCodeRequest) {
+                    // Temporarily replace the last user message with the specific code generation prompt
+                    // This is a simple way to guide the AI for code generation without complex state management
+                    const originalLastUserMessage = chatHistory[chatHistory.length - 1];
+                    chatHistory[chatHistory.length - 1] = { role: "user", parts: [{ text: promptForAI }] };
+                }
+
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.status} - ${errorData.error.message || 'Unknown error'}`);
+                }
+
+                const result = await response.json();
+
+                // Restore original chat history if it was modified for code generation
+                if (isCodeRequest) {
+                    chatHistory[chatHistory.length - 1] = originalLastUserMessage;
+                }
+
+                // Check if the response structure is as expected
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const aiResponse = result.candidates[0].content.parts[0].text;
+
+                    if (isCodeRequest) {
+                        // Attempt to parse code blocks from the AI's response
+                        const codeBlocks = aiResponse.match(/```(\w+)?\n([\s\S]*?)\n```/g);
+                        if (codeBlocks) {
+                            codeBlocks.forEach(block => {
+                                const match = block.match(/```(\w+)?\n([\s\S]*)\n```/);
+                                const lang = match[1] || 'plaintext';
+                                const code = match[2];
+                                displayMessage(code, 'ai', true, lang); // Display code in chat
+                            });
+                        } else {
+                            // If no code block format, display as regular text but indicate it was a code request
+                            displayMessage(aiResponse, 'ai', false, '');
+                            displayMessage("Tip: For better code formatting, please be specific about the language (e.g., 'generate HTML code for...').", 'ai');
+                            logToConsole("AI response did not contain a formatted code block.", 'info');
+                        }
+                    } else {
+                        displayMessage(aiResponse, 'ai'); // Display AI's response as regular text
+                    }
+                    logToConsole("AI response received.", 'success');
+
+                } else {
+                    displayMessage("Sorry, I couldn't generate a response. The AI's output was unexpected.", 'ai');
+                    logToConsole("Error: Unexpected AI response structure.", 'error');
+                    console.error("Unexpected AI response structure:", result);
+                }
+
+            } catch (error) {
+                console.error("Error communicating with AI:", error);
+                displayMessage("I'm experiencing some technical difficulties. Please try again later.", 'ai');
+                logToConsole(`Error: ${error.message}`, 'error');
+            } finally {
+                loadingIndicator.classList.add('hidden'); // Hide loading indicator
+            }
+        }
+
+        // Function to switch between code view and webpage preview tabs
+        function switchToPreviewTab(tabName) {
+            // Deactivate all tab buttons and hide all tab views
+            codeTabButton.classList.remove('active');
+            webpageTabButton.classList.remove('active');
+            codeViewTab.classList.remove('active');
+            webpagePreviewTab.classList.remove('active');
+
+            if (tabName === 'code') {
+                codeTabButton.classList.add('active');
+                codeViewTab.classList.add('active');
+                runCodeButton.classList.add('hidden'); // Hide run button in code view
+                // If no code generated yet, show placeholder
+                if (!lastGeneratedCode) {
+                    codePreviewContent.innerHTML = `<code class="language-plaintext">
+                        &lt;p style='font-family: sans-serif; color: #888; text-align: center; margin-top: 50px;'&gt;Generated code will appear here.&lt;/p&gt;
+                    </code>`;
+                    Prism.highlightElement(codePreviewContent.querySelector('code'));
+                }
+            } else if (tabName === 'webpage') {
+                webpageTabButton.classList.add('active');
+                webpagePreviewTab.classList.add('active');
+                if (lastGeneratedHtml) {
+                    runCodeButton.classList.remove('hidden'); // Show run button if HTML exists
+                } else {
+                    runCodeButton.classList.add('hidden'); // Hide run button if no HTML
+                    previewIframe.srcdoc = "<p style='font-family: sans-serif; color: #555; text-align: center; margin-top: 50px;'>Generated webpage will appear here.</p>";
+                }
+            }
+        }
+
+        // Function to copy code to clipboard
+        function copyCodeToClipboard() {
+            if (lastGeneratedCode) {
+                navigator.clipboard.writeText(lastGeneratedCode).then(() => {
+                    copyFeedback.classList.add('show');
+                    logToConsole("Code copied to clipboard.", 'success');
+                    setTimeout(() => {
+                        copyFeedback.classList.remove('show');
+                    }, 1500); // Show for 1.5 seconds
+                }).catch(err => {
+                    console.error('Failed to copy code: ', err);
+                    logToConsole("Failed to copy code to clipboard.", 'error');
+                    // Fallback for older browsers or if writeText fails
+                    const textArea = document.createElement("textarea");
+                    textArea.value = lastGeneratedCode;
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        copyFeedback.classList.add('show');
+                        setTimeout(() => {
+                            copyFeedback.classList.remove('show');
+                        }, 1500);
+                        logToConsole("Code copied (fallback method).", 'success');
+                    } catch (err) {
+                        console.error('Fallback copy failed: ', err);
+                        logToConsole("Fallback copy failed.", 'error');
+                    }
+                    document.body.removeChild(textArea);
+                });
+            } else {
+                logToConsole("No code to copy.", 'info');
+            }
+        }
+
+        // Function to run the code in the iframe
+        function runCodeInPreview() {
+            if (lastGeneratedHtml) {
+                previewIframe.srcdoc = lastGeneratedHtml;
+                logToConsole("Webpage refreshed in preview.", 'info');
+            } else {
+                logToConsole("No HTML code to run in preview.", 'info');
+            }
+        }
+
+        // Resizing Logic
+        let activeResizer = null;
+        let startX, startY, startChatWidth, startPreviewWidth, startBottomHeight;
+
+        function initResizer(resizer, panel1, panel2) {
+            resizer.addEventListener('mousedown', (e) => {
+                activeResizer = resizer;
+                startX = e.clientX;
+                startY = e.clientY;
+
+                if (resizer === chatResizer) {
+                    startChatWidth = chatPanel.offsetWidth;
+                    startPreviewWidth = previewPanel.offsetWidth;
+                } else if (resizer === bottomResizer) {
+                    startBottomHeight = bottomPanel.offsetHeight;
+                    startMainContentHeight = mainContentArea.offsetHeight;
+                }
+
+                document.addEventListener('mousemove', doResize);
+                document.addEventListener('mouseup', stopResize);
+            });
+        }
+
+        function doResize(e) {
+            if (activeResizer === chatResizer) {
+                const dx = e.clientX - startX;
+                let newChatWidth = startChatWidth + dx;
+                let newPreviewWidth = startPreviewWidth - dx;
+
+                // Apply limits
+                if (newChatWidth < parseInt(getComputedStyle(chatPanel).minWidth)) {
+                    newChatWidth = parseInt(getComputedStyle(chatPanel).minWidth);
+                }
+                if (newPreviewWidth < parseInt(getComputedStyle(previewPanel).minWidth)) {
+                    newPreviewWidth = parseInt(getComputedStyle(previewPanel).minWidth);
+                }
+
+                chatPanel.style.flexBasis = `${newChatWidth}px`;
+                previewPanel.style.flexBasis = `${newPreviewWidth}px`;
+            } else if (activeResizer === bottomResizer) {
+                const dy = e.clientY - startY;
+                let newBottomHeight = startBottomHeight - dy; // Dragging up increases height
+                let newMainContentHeight = startMainContentHeight + dy; // Main content shrinks
+
+                // Apply limits
+                if (newBottomHeight < parseInt(getComputedStyle(bottomPanel).minHeight)) {
+                    newBottomHeight = parseInt(getComputedStyle(bottomPanel).minHeight);
+                }
+                if (newBottomHeight > parseInt(getComputedStyle(bottomPanel).maxHeight)) {
+                    newBottomHeight = parseInt(getComputedStyle(bottomPanel).maxHeight);
+                }
+
+                bottomPanel.style.height = `${newBottomHeight}px`;
+                mainContentArea.style.height = `${newMainContentHeight}px`; // Adjust main content height
+            }
+        }
+
+        function stopResize() {
+            activeResizer = null;
+            document.removeEventListener('mousemove', doResize);
+            document.removeEventListener('mouseup', stopResize);
+        }
+
+        // Initialize horizontal resizer between chat and preview
+        initResizer(chatResizer, chatPanel, previewPanel);
+
+        // Initialize vertical resizer
+        initResizer(bottomResizer, mainContentArea, bottomPanel);
+
+
+        // Event listeners for tab buttons
+        codeTabButton.addEventListener('click', () => switchToPreviewTab('code'));
+        webpageTabButton.addEventListener('click', () => switchToPreviewTab('webpage'));
+        copyCodeButton.addEventListener('click', copyCodeToClipboard);
+        runCodeButton.addEventListener('click', runCodeInPreview); // New event listener for run code button
+        clearConsoleButton.addEventListener('click', clearConsole); // New event listener for clear console button
+
+        // Event listeners for send
+        sendButton.addEventListener('click', sendMessageToAI);
+        chatInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendMessageToAI();
+            }
+        });
+
+        // Ensure the chat scrolls to the bottom on initial load
+        window.onload = () => {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // Initialize the code view tab as active by default on load
+            switchToPreviewTab('code');
+            logToConsole("IDE loaded. Ready for commands.", 'info');
+        };
+    </script>
+</body>
+</html>
