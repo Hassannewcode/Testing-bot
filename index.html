@@ -637,6 +637,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+    <!-- Main application script -->
     <script>
         // Get references to DOM elements
         const chatInput = document.getElementById('chatInput');
@@ -724,33 +725,31 @@
                 codeContainer.appendChild(codeElement);
                 messageBubble.appendChild(codeContainer);
 
-                // Update the code preview panel
+                // --- CONNECTION: AI generated code updates Code Preview ---
                 lastGeneratedCode = message;
-                // Determine the correct language for Prism.js
                 let prismLanguage = language.toLowerCase();
                 if (prismLanguage === 'html_css_js') {
                     prismLanguage = 'html'; // Treat as HTML for highlighting
                 } else if (!Prism.languages[prismLanguage]) {
                     prismLanguage = 'plaintext'; // Fallback if language not supported
                 }
-
                 codePreviewContent.innerHTML = `<code class="language-${prismLanguage}">${Prism.highlight(message, Prism.languages[prismLanguage], prismLanguage)}</code>`;
-                codePreviewContent.className = `code-view-content language-${prismLanguage} line-numbers`; // Apply classes for Prism and line numbers
-                Prism.highlightElement(codePreviewContent.querySelector('code')); // Re-highlight
+                codePreviewContent.className = `code-view-content language-${prismLanguage} line-numbers`;
+                Prism.highlightElement(codePreviewContent.querySelector('code'));
                 logToConsole(`Generated ${language} code.`, 'success');
 
-                // If it's HTML code, also update the webpage preview iframe and show run button
-                if (language.toLowerCase().includes('html')) { // Check for 'html' or 'html_css_js'
+                // --- CONNECTION: AI generated HTML updates Webpage Preview ---
+                if (language.toLowerCase().includes('html')) {
                     lastGeneratedHtml = message;
-                    previewIframe.srcdoc = lastGeneratedHtml; // Load the HTML into the iframe
-                    runCodeButton.classList.remove('hidden'); // Show run button
-                    switchToPreviewTab('webpage'); // Automatically switch to webpage preview
+                    previewIframe.srcdoc = lastGeneratedHtml;
+                    runCodeButton.classList.remove('hidden');
+                    switchToPreviewTab('webpage');
                     logToConsole("Webpage preview updated. Click 'Run Code' to refresh.", 'success');
                 } else {
-                    lastGeneratedHtml = ''; // Clear HTML if non-web code
+                    lastGeneratedHtml = '';
                     previewIframe.srcdoc = "<p style='font-family: sans-serif; color: #555; text-align: center; margin-top: 50px;'>Generated webpage will appear here.</p>";
-                    runCodeButton.classList.add('hidden'); // Hide run button
-                    switchToPreviewTab('code'); // Automatically switch to code view for other code
+                    runCodeButton.classList.add('hidden');
+                    switchToPreviewTab('code');
                 }
 
             } else {
@@ -758,24 +757,21 @@
             }
 
             chatMessages.appendChild(messageBubble);
-
-            // Scroll to the bottom of the chat
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         // Function to send message to the AI model
         async function sendMessageToAI() {
             const userMessage = chatInput.value.trim();
-            if (userMessage === '') return; // Don't send empty messages
+            if (userMessage === '') return;
 
-            displayMessage(userMessage, 'user'); // Display user's message
-            chatInput.value = ''; // Clear input field
+            displayMessage(userMessage, 'user');
+            chatInput.value = '';
 
-            loadingIndicator.classList.remove('hidden'); // Show loading indicator
+            loadingIndicator.classList.remove('hidden');
             logToConsole("Sending message to AI...", 'info');
 
             try {
-                // API key will be provided by the Canvas environment at runtime
                 const apiKey = "AIzaSyDHy1KpgcIw4lJZy6bYmbY7XwEBaHKzJPo"; 
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
@@ -783,7 +779,7 @@
                 let isCodeRequest = false;
                 let requestedLanguage = '';
 
-                // Check for code generation commands
+                // Determine if it's a code request based on user's prompt
                 if (userMessage.toLowerCase().includes("make code") || userMessage.toLowerCase().includes("generate code")) {
                     isCodeRequest = true;
                     promptForAI = `Generate code based on the following description: "${userMessage}". Provide the code in a single block, clearly indicating the language.`;
@@ -799,26 +795,21 @@
                 }
 
                 const payload = {
-                    contents: chatHistory, // Send the entire chat history for context
+                    contents: chatHistory,
                     generationConfig: {
-                        // Configure the model to be more direct and less conversational
-                        temperature: 0.7, // A bit of creativity
+                        temperature: 0.7,
                         topK: 40,
                         topP: 0.95,
-                        maxOutputTokens: 2000, // Increased for potentially longer code outputs
+                        maxOutputTokens: 2000,
                         stopSequences: [],
                     }
                 };
 
-                // If it's a code request, modify the last user message in chatHistory for the AI's context
-                // This ensures the AI gets the specific code generation instruction
+                // Temporarily modify chat history for AI's context if it's a code request
+                const originalLastUserMessage = chatHistory[chatHistory.length - 1];
                 if (isCodeRequest) {
-                    // Temporarily replace the last user message with the specific code generation prompt
-                    // This is a simple way to guide the AI for code generation without complex state management
-                    const originalLastUserMessage = chatHistory[chatHistory.length - 1];
                     chatHistory[chatHistory.length - 1] = { role: "user", parts: [{ text: promptForAI }] };
                 }
-
 
                 const response = await fetch(apiUrl, {
                     method: 'POST',
@@ -833,35 +824,48 @@
 
                 const result = await response.json();
 
-                // Restore original chat history if it was modified for code generation
+                // Restore original chat history
                 if (isCodeRequest) {
                     chatHistory[chatHistory.length - 1] = originalLastUserMessage;
                 }
 
-                // Check if the response structure is as expected
                 if (result.candidates && result.candidates.length > 0 &&
                     result.candidates[0].content && result.candidates[0].content.parts &&
                     result.candidates[0].content.parts.length > 0) {
                     const aiResponse = result.candidates[0].content.parts[0].text;
+                    let handledAsCode = false;
 
-                    if (isCodeRequest) {
-                        // Attempt to parse code blocks from the AI's response
-                        const codeBlocks = aiResponse.match(/```(\w+)?\n([\s\S]*?)\n```/g);
-                        if (codeBlocks) {
-                            codeBlocks.forEach(block => {
-                                const match = block.match(/```(\w+)?\n([\s\S]*)\n```/);
-                                const lang = match[1] || 'plaintext';
-                                const code = match[2];
-                                displayMessage(code, 'ai', true, lang); // Display code in chat
-                            });
-                        } else {
-                            // If no code block format, display as regular text but indicate it was a code request
-                            displayMessage(aiResponse, 'ai', false, '');
-                            displayMessage("Tip: For better code formatting, please be specific about the language (e.g., 'generate HTML code for...').", 'ai');
-                            logToConsole("AI response did not contain a formatted code block.", 'info');
+                    // Attempt to parse code blocks from the AI's response
+                    const codeBlocks = aiResponse.match(/```(\w+)?\n([\s\S]*?)\n```/g);
+                    if (codeBlocks) {
+                        codeBlocks.forEach(block => {
+                            const match = block.match(/```(\w+)?\n([\s\S]*)\n```/);
+                            const lang = match[1] || 'plaintext';
+                            const code = match[2];
+                            displayMessage(code, 'ai', true, lang); // Display code in chat and previews
+                            handledAsCode = true;
+                        });
+                    }
+
+                    // --- CONNECTION: Ensure AI's code response updates previews even without perfect formatting ---
+                    // If it was a code request from the user, but no triple-backtick block was found,
+                    // treat the entire AI response as code for the preview.
+                    if (isCodeRequest && !handledAsCode) {
+                        let fallbackLang = 'plaintext';
+                        if (userMessage.toLowerCase().includes("html") || userMessage.toLowerCase().includes("webpage")) {
+                            fallbackLang = 'html';
+                        } else if (userMessage.toLowerCase().includes("css")) {
+                            fallbackLang = 'css';
+                        } else if (userMessage.toLowerCase().includes("javascript")) {
+                            fallbackLang = 'javascript';
+                        } else if (userMessage.toLowerCase().includes("python")) {
+                            fallbackLang = 'python';
                         }
-                    } else {
-                        displayMessage(aiResponse, 'ai'); // Display AI's response as regular text
+                        displayMessage(aiResponse, 'ai', true, fallbackLang); // Display entire response as code
+                        logToConsole("AI response treated as code (no explicit block found).", 'info');
+                    } else if (!isCodeRequest || handledAsCode) {
+                        // If it's not a code request, or if code blocks were already handled, display as regular message
+                        displayMessage(aiResponse, 'ai');
                     }
                     logToConsole("AI response received.", 'success');
 
@@ -876,7 +880,7 @@
                 displayMessage("I'm experiencing some technical difficulties. Please try again later.", 'ai');
                 logToConsole(`Error: ${error.message}`, 'error');
             } finally {
-                loadingIndicator.classList.add('hidden'); // Hide loading indicator
+                loadingIndicator.classList.add('hidden');
             }
         }
 
@@ -897,7 +901,10 @@
                     codePreviewContent.innerHTML = `<code class="language-plaintext">
                         &lt;p style='font-family: sans-serif; color: #888; text-align: center; margin-top: 50px;'&gt;Generated code will appear here.&lt;/p&gt;
                     </code>`;
-                    Prism.highlightElement(codePreviewContent.querySelector('code'));
+                    // Ensure Prism.js is available before highlighting
+                    if (typeof Prism !== 'undefined') {
+                        Prism.highlightElement(codePreviewContent.querySelector('code'));
+                    }
                 }
             } else if (tabName === 'webpage') {
                 webpageTabButton.classList.add('active');
